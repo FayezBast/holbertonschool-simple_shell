@@ -1,0 +1,31 @@
+.TH simple_shell 1 "February 2025" "Simple Shell" "User Commands"
+.SH NAME
+simple_shell \- A simple UNIX command interpreter
+.SH SYNOPSIS
+.B simple_shell
+[\fIOPTION\fR]... 
+.SH DESCRIPTION
+.B simple_shell
+is a custom UNIX shell that reads user input, parses commands, and executes them.
+.SH OPTIONS
+.TP
+.B \-h, --help
+Display this help message and exit.
+.SH USAGE
+Run the shell by executing:
+.EX
+$ ./simple_shell
+.EE
+.SH EXAMPLES
+To start the shell:
+.EX
+$ ./simple_shell
+.EE
+To exit:
+.EX
+$ exit
+.EE
+.SH AUTHORS
+ Fayez Bast - https://github.com/Fayezbast
+.SH SEE ALSO
+.BR sh (1), bash (1), man (1)

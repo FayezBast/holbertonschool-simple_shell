@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define PROMPT "#fyzshell$ "
+#define PROMPT "#fayezshell$ "
 
 int main(void)
 {
@@ -17,38 +17,41 @@ int main(void)
 
     while (1)
     {
-        printf(PROMPT);  
+        printf(PROMPT);
         fflush(stdout);
 
-        nread = getline(&line, &len, stdin);  
-        if (nread == -1)  
+        nread = getline(&line, &len, stdin);
+        if (nread == -1)  // Handle Ctrl+D (EOF)
         {
             printf("\n");
             break;
         }
 
-        line[strcspn(line, "\n")] = '\0'; 
+        line[strcspn(line, "\n")] = '\0';  // Remove newline character
 
-        if (strlen(line) == 0)  
+        if (strlen(line) == 0)  // Ignore empty input
             continue;
 
-        pid = fork();  
+        pid = fork();
         if (pid == -1)
         {
             perror("fork");
             exit(EXIT_FAILURE);
         }
 
-        if (pid == 0)  
+        if (pid == 0)  // Child process
         {
-            char *args[] = {line, NULL};
-            if (execve(line, args, NULL) == -1)  
+            char *args[2];   // Fixed-size array
+            args[0] = line;
+            args[1] = NULL;
+
+            if (execve(line, args, NULL) == -1)
             {
                 perror("./shell");
                 exit(EXIT_FAILURE);
             }
         }
-        else
+        else  // Parent process
         {
             wait(&status);
         }
@@ -57,3 +60,4 @@ int main(void)
     free(line);
     return 0;
 }
+

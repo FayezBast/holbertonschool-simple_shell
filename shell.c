@@ -5,8 +5,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define PROMPT "#cisfun$"
-
+#define PROMPT "$fb "
+/**
+ * main - Simple UNIX command line interpreter
+ * 
+ * Return: 0 on success, 1 on failure
+ */
 int main(void)
 {
     char *line = NULL;
@@ -14,16 +18,21 @@ int main(void)
     ssize_t nread;
     pid_t pid;
     int status;
+    int interactive = isatty(STDIN_FILENO);
 
     while (1)
     {
-        printf(PROMPT);
-        fflush(stdout);
+        if (interactive)
+        {
+            printf(PROMPT);
+            fflush(stdout);
+        }
 
         nread = getline(&line, &len, stdin);
-        if (nread == -1)  
+        if (nread == -1)
         {
-            printf("\n");
+            if (interactive)
+                printf("\n");
             break;
         }
 
@@ -45,15 +54,13 @@ int main(void)
             args[0] = line;
             args[1] = NULL;
 
-            if (execve(line, args, NULL) == -1)
-            {
-                perror("./shell");
-                exit(EXIT_FAILURE);
-            }
+            execve(args[0], args, NULL);
+            perror(line);
+            exit(EXIT_FAILURE);
         }
         else
         {
-            wait(&status);
+            waitpid(pid, &status, 0);
         }
     }
 

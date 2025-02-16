@@ -6,19 +6,44 @@
 #include <sys/wait.h>
 
 #define PROMPT "$fb "
-/**
- * main - Simple UNIX command line interpreter
- * 
- * Return: 0 on success, 1 on failure
- */
+#define MAX_ARGS 64
+
+void execute_command(char *cmd)
+{
+    char *args[MAX_ARGS];
+    char *token;
+    int i = 0;
+
+    token = strtok(cmd, " \t");
+    while (token != NULL && i < MAX_ARGS - 1)
+    {
+        args[i++] = token;
+        token = strtok(NULL, " \t");
+    }
+    args[i] = NULL;
+
+    if (args[0] == NULL)
+        return;
+
+    if (fork() == 0)
+    {
+        execve(args[0], args, NULL);
+        perror("execve");
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        wait(NULL);
+    }
+}
+
 int main(void)
 {
     char *line = NULL;
     size_t len = 0;
     ssize_t nread;
-    pid_t pid;
-    int status;
     int interactive = isatty(STDIN_FILENO);
+    char *command;
 
     while (1)
     {
@@ -38,32 +63,15 @@ int main(void)
 
         line[strcspn(line, "\n")] = '\0';
 
-        if (strlen(line) == 0)
-            continue;
-
-        pid = fork();
-        if (pid == -1)
+        command = strtok(line, ";");
+        while (command != NULL)
         {
-            perror("fork");
-            exit(EXIT_FAILURE);
-        }
-
-        if (pid == 0)
-        {
-            char *args[2];
-            args[0] = line;
-            args[1] = NULL;
-
-            execve(args[0], args, NULL);
-            perror(line);
-            exit(EXIT_FAILURE);
-        }
-        else
-        {
-            waitpid(pid, &status, 0);
+            execute_command(command);
+            command = strtok(NULL, ";");
         }
     }
 
     free(line);
     return 0;
 }
+

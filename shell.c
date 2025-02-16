@@ -17,40 +17,40 @@ int main(void)
 
     while (1)
     {
-        printf(PROMPT);  // Display prompt
+        printf(PROMPT);  
         fflush(stdout);
 
-        nread = getline(&line, &len, stdin);  // Read user input
-        if (nread == -1)  // Handle Ctrl+D (EOF)
+        nread = getline(&line, &len, stdin);  
+        if (nread == -1)  
         {
             printf("\n");
             break;
         }
 
-        line[strcspn(line, "\n")] = '\0';  // Remove newline character
+        line[strcspn(line, "\n")] = '\0'; 
 
-        if (strlen(line) == 0)  // Ignore empty input
+        if (strlen(line) == 0)  
             continue;
 
-        pid = fork();  // Create a child process
+        pid = fork();  
         if (pid == -1)
         {
             perror("fork");
             exit(EXIT_FAILURE);
         }
 
-        if (pid == 0)  // Child process
+        if (pid == 0)  
         {
             char *args[] = {line, NULL};
-            if (execve(line, args, NULL) == -1)  // Execute command
+            if (execve(line, args, NULL) == -1)  
             {
                 perror("./shell");
                 exit(EXIT_FAILURE);
             }
         }
-        else  // Parent process
+        else
         {
-            wait(&status);  // Wait for the child to finish
+            wait(&status);
         }
     }
 

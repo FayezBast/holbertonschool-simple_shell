@@ -21,15 +21,15 @@ int main(void)
         fflush(stdout);
 
         nread = getline(&line, &len, stdin);
-        if (nread == -1)  // Handle Ctrl+D (EOF)
+        if (nread == -1)  
         {
             printf("\n");
             break;
         }
 
-        line[strcspn(line, "\n")] = '\0';  // Remove newline character
+        line[strcspn(line, "\n")] = '\0';
 
-        if (strlen(line) == 0)  // Ignore empty input
+        if (strlen(line) == 0)
             continue;
 
         pid = fork();
@@ -39,9 +39,9 @@ int main(void)
             exit(EXIT_FAILURE);
         }
 
-        if (pid == 0)  // Child process
+        if (pid == 0)
         {
-            char *args[2];   // Fixed-size array
+            char *args[2];
             args[0] = line;
             args[1] = NULL;
 
@@ -51,7 +51,7 @@ int main(void)
                 exit(EXIT_FAILURE);
             }
         }
-        else  // Parent process
+        else
         {
             wait(&status);
         }
@@ -60,4 +60,3 @@ int main(void)
     free(line);
     return 0;
 }
-

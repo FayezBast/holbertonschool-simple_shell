@@ -8,33 +8,81 @@
 #define PROMPT "$fb "
 #define MAX_ARGS 64
 
-void execute_command(char *cmd)
+char *find_command(char *command)
 {
-    char *args[MAX_ARGS];
-    char *token;
-    int i = 0;
+    char *path = getenv("PATH");
+    char *path_copy, *token, *full_path;
+    size_t command_len;
 
-    token = strtok(cmd, " \t");
-    while (token != NULL && i < MAX_ARGS - 1)
+    if (!path)
+        return NULL;
+
+    path_copy = strdup(path);
+    if (!path_copy)
+        return NULL;
+
+    token = strtok(path_copy, ":");
+    command_len = strlen(command);
+
+    while (token)
     {
-        args[i++] = token;
-        token = strtok(NULL, " \t");
+        full_path = malloc(strlen(token) + command_len + 2);
+        if (!full_path)
+        {
+            free(path_copy);
+            return NULL;
+        }
+
+        sprintf(full_path, "%s/%s", token, command);
+        if (access(full_path, X_OK) == 0)
+        {
+            free(path_copy);
+            return full_path;
+        }
+
+        free(full_path);
+        token = strtok(NULL, ":");
     }
-    args[i] = NULL;
 
-    if (args[0] == NULL)
-        return;
+    free(path_copy);
+    return NULL;
+}
 
-    if (fork() == 0)
+void execute_command(char *command, char **args)
+{
+    char *full_path;
+    pid_t pid;
+    int status;
+
+    full_path = find_command(command);
+    if (!full_path)
     {
-        execve(args[0], args, NULL);
-        perror("execve");
+        fprintf(stderr, "%s: command not found\n", command);
+        return;
+    }
+
+    pid = fork();
+    if (pid == -1)
+    {
+        perror("fork");
+        free(full_path);
         exit(EXIT_FAILURE);
+    }
+    else if (pid == 0)
+    {
+        if (execve(full_path, args, environ) == -1)
+        {
+            perror("execve");
+            free(full_path);
+            exit(EXIT_FAILURE);
+        }
     }
     else
     {
-        wait(NULL);
+        waitpid(pid, &status, 0);
     }
+
+    free(full_path);
 }
 
 int main(void)

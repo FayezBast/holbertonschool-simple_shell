@@ -4,55 +4,55 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
+#include <ctype.h> // For isspace()
+#include <errno.h> // For errno
 
 #define PROMPT "$fb "
 #define MAX_ARGS 64
+#define MAX_PATH_LEN 1024
 
-char *get_full_path(char *cmd)
+char *trim_whitespace(char *str)
 {
-    struct stat st;
-    char *path = NULL;
-    char *path_copy = NULL;
-    char *dir = NULL;
-    char *full_path = NULL;
-    
-    if (strchr(cmd, '/') != NULL)
+    while (isspace(*str)) str++;
+    if (*str == '\0') return str;
+
+    char *end = str + strlen(str) - 1;
+    while (end > str && isspace(*end)) end--;
+    end[1] = '\0';
+    return str;
+}
+
+char *find_command(const char *cmd)
+{
+    if (cmd == NULL) return NULL;
+
+    if (cmd[0] == '/' || (cmd[0] == '.' && (cmd[1] == '/' || (cmd[1] == '.' && cmd[2] == '/'))))
     {
-        if (stat(cmd, &st) == 0)
-            return strdup(cmd);
+        if (access(cmd, X_OK) == 0) return strdup(cmd);
         return NULL;
     }
 
-    path = getenv("PATH");
-    if (!path)
-        return NULL;
+    char *path = getenv("PATH");
+    if (path == NULL) return NULL;
 
-    path_copy = strdup(path);
-    if (!path_copy)
-        return NULL;
+    char *path_copy = strdup(path);
+    if (path_copy == NULL) return NULL;
 
-    dir = strtok(path_copy, ":");
+    char *dir = strtok(path_copy, ":");
     while (dir != NULL)
     {
-        full_path = malloc(strlen(dir) + strlen(cmd) + 2);
-        if (!full_path)
+        char full_path[MAX_PATH_LEN];
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir, cmd);
+
+        if (access(full_path, X_OK) == 0)
         {
             free(path_copy);
-            return NULL;
+            return strdup(full_path);
         }
-        sprintf(full_path, "%s/%s", dir, cmd);
-        
-        if (stat(full_path, &st) == 0)
-        {
-            free(path_copy);
-            return full_path;
-        }
-        
-        free(full_path);
+
         dir = strtok(NULL, ":");
     }
-    
+
     free(path_copy);
     return NULL;
 }
@@ -62,14 +62,9 @@ void execute_command(char *cmd)
     char *args[MAX_ARGS];
     char *token;
     int i = 0;
-    char *full_path;
-    pid_t pid;
 
-    while (*cmd == ' ' || *cmd == '\t')
-        cmd++;
-
-    if (*cmd == '\0')
-        return;
+    cmd = trim_whitespace(cmd);
+    if (cmd[0] == '\0') return;
 
     token = strtok(cmd, " \t");
     while (token != NULL && i < MAX_ARGS - 1)
@@ -79,27 +74,32 @@ void execute_command(char *cmd)
     }
     args[i] = NULL;
 
-    if (args[0] == NULL)
-        return;
+    if (args[0] == NULL) return;
 
-    full_path = get_full_path(args[0]);
-    if (!full_path)
+    char *command_path = find_command(args[0]);
+    if (command_path == NULL)
+    {
+        fprintf(stderr, "%s: command not found\n", args[0]);
         return;
+    }
 
-    pid = fork();
+    pid_t pid = fork();
     if (pid == 0)
     {
-        execve(full_path, args, NULL);
+        execve(command_path, args, environ);
         perror("execve");
-        free(full_path);
         exit(EXIT_FAILURE);
     }
     else if (pid > 0)
     {
         wait(NULL);
     }
+    else
+    {
+        perror("fork");
+    }
 
-    free(full_path);
+    free(command_path);
 }
 
 int main(void)
@@ -107,10 +107,7 @@ int main(void)
     char *line = NULL;
     size_t len = 0;
     ssize_t nread;
-    int interactive;
-    char *command;
-
-    interactive = isatty(STDIN_FILENO);
+    int interactive = isatty(STDIN_FILENO);
 
     while (1)
     {
@@ -129,7 +126,8 @@ int main(void)
         }
 
         line[strcspn(line, "\n")] = '\0';
-        command = strtok(line, ";");
+
+        char *command = strtok(line, ";");
         while (command != NULL)
         {
             execute_command(command);

@@ -14,8 +14,8 @@ void execute_command(char *cmd)
     char *args[MAX_ARGS];
     char *token;
     int i = 0;
-    char *path; 
-    char *path_token; 
+    char *path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin";
+    char *path_token;
     char cmd_path[1024];
     int found;
 
@@ -52,7 +52,6 @@ void execute_command(char *cmd)
         return;
     }
 
-    path = getenv("PATH");
     path_token = strtok(path, ":");
     found = 0;
 

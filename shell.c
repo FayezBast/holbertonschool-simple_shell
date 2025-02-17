@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <ctype.h> // For isspace()
-#include <errno.h> // For errno
+#include <ctype.h>
+#include <errno.h>
 
 #define PROMPT "$fb "
 #define MAX_ARGS 64

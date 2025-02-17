@@ -8,6 +8,8 @@
 #define PROMPT "$fb "
 #define MAX_ARGS 64
 
+extern char **environ;
+
 char *find_command(char *command)
 {
     char *path = getenv("PATH");
@@ -43,7 +45,7 @@ char *find_command(char *command)
         free(full_path);
         token = strtok(NULL, ":");
     }
-
+    
     free(path_copy);
     return NULL;
 }
@@ -92,6 +94,8 @@ int main(void)
     ssize_t nread;
     int interactive = isatty(STDIN_FILENO);
     char *command;
+    char *args[MAX_ARGS];
+    int i;
 
     while (1)
     {
@@ -114,7 +118,18 @@ int main(void)
         command = strtok(line, ";");
         while (command != NULL)
         {
-            execute_command(command);
+            i = 0;
+            args[i] = strtok(command, " ");
+            while (args[i] != NULL && i < MAX_ARGS - 1)
+            {
+                i++;
+                args[i] = strtok(NULL, " ");
+            }
+            args[i] = NULL;
+
+            if (args[0] != NULL)
+                execute_command(args[0], args);
+
             command = strtok(NULL, ";");
         }
     }

@@ -12,58 +12,66 @@ extern char **environ;
 
 char *find_command(char *command)
 {
+    if (strchr(command, '/') != NULL)
+    {
+        if (access(command, X_OK) == 0)
+            return strdup(command);
+        return NULL;
+    }
+    
     char *path = getenv("PATH");
-    char *path_copy, *token, *full_path;
-    size_t command_len;
-
     if (!path)
         return NULL;
 
-    path_copy = strdup(path);
+    char *path_copy = strdup(path);
     if (!path_copy)
         return NULL;
 
-    token = strtok(path_copy, ":");
-    command_len = strlen(command);
-
+    char *token = strtok(path_copy, ":");
     while (token)
     {
-        full_path = malloc(strlen(token) + command_len + 2);
+        char *full_path = malloc(strlen(token) + strlen(command) + 2);
         if (!full_path)
         {
             free(path_copy);
             return NULL;
         }
-
         sprintf(full_path, "%s/%s", token, command);
         if (access(full_path, X_OK) == 0)
         {
             free(path_copy);
             return full_path;
         }
-
         free(full_path);
         token = strtok(NULL, ":");
     }
-    
     free(path_copy);
     return NULL;
 }
 
-void execute_command(char *command, char **args)
+void execute_command(char *command)
 {
-    char *full_path;
-    pid_t pid;
-    int status;
-
-    full_path = find_command(command);
+    char *args[MAX_ARGS];
+    int i = 0;
+    char *token = strtok(command, " ");
+    while (token && i < MAX_ARGS - 1)
+    {
+        args[i++] = token;
+        token = strtok(NULL, " ");
+    }
+    args[i] = NULL;
+    
+    if (!args[0])
+        return;
+    
+    char *full_path = find_command(args[0]);
     if (!full_path)
     {
-        fprintf(stderr, "%s: command not found\n", command);
+        fprintf(stderr, "%s: command not found\n", args[0]);
         return;
     }
-
-    pid = fork();
+    
+    pid_t pid = fork();
     if (pid == -1)
     {
         perror("fork");
@@ -72,18 +80,16 @@ void execute_command(char *command, char **args)
     }
     else if (pid == 0)
     {
-        if (execve(full_path, args, environ) == -1)
-        {
-            perror("execve");
-            free(full_path);
-            exit(EXIT_FAILURE);
-        }
+        execve(full_path, args, environ);
+        perror("execve");
+        free(full_path);
+        exit(EXIT_FAILURE);
     }
     else
     {
+        int status;
         waitpid(pid, &status, 0);
     }
-
     free(full_path);
 }
 
@@ -93,10 +99,7 @@ int main(void)
     size_t len = 0;
     ssize_t nread;
     int interactive = isatty(STDIN_FILENO);
-    char *command;
-    char *args[MAX_ARGS];
-    int i;
-
+    
     while (1)
     {
         if (interactive)
@@ -115,25 +118,13 @@ int main(void)
 
         line[strcspn(line, "\n")] = '\0';
 
-        command = strtok(line, ";");
+        char *command = strtok(line, ";");
         while (command != NULL)
         {
-            i = 0;
-            args[i] = strtok(command, " ");
-            while (args[i] != NULL && i < MAX_ARGS - 1)
-            {
-                i++;
-                args[i] = strtok(NULL, " ");
-            }
-            args[i] = NULL;
-
-            if (args[0] != NULL)
-                execute_command(args[0], args);
-
+            execute_command(command);
             command = strtok(NULL, ";");
         }
     }
-
     free(line);
     return 0;
 }

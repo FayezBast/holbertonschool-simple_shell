@@ -4,93 +4,102 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <errno.h>
 
-#define PROMPT "$fb "
 #define MAX_ARGS 64
+#define PATH_DELIM ":"
 
-extern char **environ;
-
-char *find_command(char *command)
+/**
+ * find_command - searches for the command in the directories listed in PATH
+ * @cmd: the command to search for
+ * Return: the full path of the command if found, NULL otherwise
+ */
+char *find_command(char *cmd)
 {
-    if (strchr(command, '/') != NULL)
-    {
-        if (access(command, X_OK) == 0)
-            return strdup(command);
-        return NULL;
-    }
-    
     char *path = getenv("PATH");
     if (!path)
         return NULL;
 
     char *path_copy = strdup(path);
-    if (!path_copy)
-        return NULL;
+    char *dir = strtok(path_copy, PATH_DELIM);
+    char *cmd_path = NULL;
+    struct stat st;
 
-    char *token = strtok(path_copy, ":");
-    while (token)
+    while (dir)
     {
-        char *full_path = malloc(strlen(token) + strlen(command) + 2);
-        if (!full_path)
+        cmd_path = malloc(strlen(dir) + strlen(cmd) + 2);
+        if (!cmd_path)
         {
+            perror("malloc");
             free(path_copy);
             return NULL;
         }
-        sprintf(full_path, "%s/%s", token, command);
-        if (access(full_path, X_OK) == 0)
+        
+        sprintf(cmd_path, "%s/%s", dir, cmd);
+        
+        if (stat(cmd_path, &st) == 0 && (st.st_mode & S_IXUSR))
         {
             free(path_copy);
-            return full_path;
+            return cmd_path;
         }
-        free(full_path);
-        token = strtok(NULL, ":");
+
+        free(cmd_path);
+        dir = strtok(NULL, PATH_DELIM);
     }
+
     free(path_copy);
     return NULL;
 }
 
-void execute_command(char *command)
+/**
+ * execute_command - forks and executes the given command
+ * @cmd: the command to execute
+ */
+void execute_command(char *cmd)
 {
     char *args[MAX_ARGS];
+    char *token;
     int i = 0;
-    char *token = strtok(command, " ");
-    while (token && i < MAX_ARGS - 1)
+    pid_t pid;
+
+    token = strtok(cmd, " \t");
+    while (token != NULL && i < MAX_ARGS - 1)
     {
         args[i++] = token;
-        token = strtok(NULL, " ");
+        token = strtok(NULL, " \t");
     }
     args[i] = NULL;
-    
-    if (!args[0])
+
+    if (args[0] == NULL)
         return;
-    
-    char *full_path = find_command(args[0]);
-    if (!full_path)
+
+    char *cmd_path = find_command(args[0]);
+    if (cmd_path == NULL)
     {
-        fprintf(stderr, "%s: command not found\n", args[0]);
+        perror("Command not found");
         return;
     }
-    
-    pid_t pid = fork();
+
+    pid = fork();
     if (pid == -1)
     {
-        perror("fork");
-        free(full_path);
-        exit(EXIT_FAILURE);
+        perror("Fork failed");
+        free(cmd_path);
+        return;
     }
-    else if (pid == 0)
+
+    if (pid == 0)
     {
-        execve(full_path, args, environ);
-        perror("execve");
-        free(full_path);
+        execve(cmd_path, args, NULL);
+        perror("Execve failed");
+        free(cmd_path);
         exit(EXIT_FAILURE);
     }
     else
     {
-        int status;
-        waitpid(pid, &status, 0);
+        wait(NULL);
+        free(cmd_path);
     }
-    free(full_path);
 }
 
 int main(void)
@@ -99,12 +108,13 @@ int main(void)
     size_t len = 0;
     ssize_t nread;
     int interactive = isatty(STDIN_FILENO);
-    
+    char *command;
+
     while (1)
     {
         if (interactive)
         {
-            printf(PROMPT);
+            printf(":) ");
             fflush(stdout);
         }
 
@@ -118,14 +128,14 @@ int main(void)
 
         line[strcspn(line, "\n")] = '\0';
 
-        char *command = strtok(line, ";");
+        command = strtok(line, ";");
         while (command != NULL)
         {
             execute_command(command);
             command = strtok(NULL, ";");
         }
     }
+
     free(line);
     return 0;
 }
-

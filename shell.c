@@ -14,6 +14,10 @@ void execute_command(char *cmd)
     char *args[MAX_ARGS];
     char *token;
     int i = 0;
+    char *path; 
+    char *path_token; 
+    char cmd_path[1024];
+    int found;
 
     token = strtok(cmd, " \t");
     while (token != NULL && i < MAX_ARGS - 1)
@@ -48,10 +52,9 @@ void execute_command(char *cmd)
         return;
     }
 
-    char *path = getenv("PATH");
-    char *path_token = strtok(path, ":");
-    char cmd_path[1024];
-    int found = 0;
+    path = getenv("PATH");
+    path_token = strtok(path, ":");
+    found = 0;
 
     while (path_token != NULL)
     {

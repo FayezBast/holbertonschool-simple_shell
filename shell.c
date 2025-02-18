@@ -15,7 +15,7 @@ extern char **environ;
  */
 void display_prompt(void)
 {
-    printf(":) ");
+    printf("#fb$ ");
     fflush(stdout);
 }
 
@@ -136,6 +136,24 @@ int parse_command(char *command_line, char **args)
 }
 
 /**
+ * check_built_in - Checks if command is a built-in
+ * @args: Array of command and arguments
+ * Return: 1 if built-in command was executed, 0 if not a built-in
+ */
+int check_built_in(char **args)
+{
+    if (args[0] == NULL)
+        return 0;
+
+    if (strcmp(args[0], "exit") == 0)
+    {
+        exit(0);
+    }
+
+    return 0;
+}
+
+/**
  * execute_command - Executes the given command with arguments
  * @args: Array of command and arguments
  * @cmd_count: Command counter for error messages
@@ -150,6 +168,9 @@ int execute_command(char **args, int cmd_count, char *program_name)
     char error_msg[100];
 
     if (args[0] == NULL)
+        return 0;
+
+    if (check_built_in(args))
         return 0;
 
     command_path = find_command(args[0]);

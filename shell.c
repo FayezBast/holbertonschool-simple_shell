@@ -40,17 +40,21 @@ void parse_command(char *command, char **argv) {
 
 int command_exists(char *command) {
     struct stat st;
+    char *path;
+    char *path_copy;
+    char *dir;
+    
     if (stat(command, &st) == 0) {
         return 1;
     }
 
-    char *path = getenv("PATH");
+    path = getenv("PATH");
     if (!path) {
         return 0;
     }
 
-    char *path_copy = strdup(path);
-    char *dir = strtok(path_copy, ":");
+    path_copy = strdup(path);
+    dir = strtok(path_copy, ":");
 
     while (dir != NULL) {
         char full_path[MAX_CMD_LEN];
@@ -96,7 +100,9 @@ void execute_command(char **argv) {
 }
 
 void print_env(void) {
-    for (char **env = environ; *env != 0; env++) {
+    char **env;
+
+    for (env = environ; *env != 0; env++) {
         printf("%s\n", *env);
     }
 }

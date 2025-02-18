@@ -11,35 +11,21 @@
 extern char **environ;
 
 /**
- * display_prompt - Displays the shell prompt
+ * handle_built_in - Handles built-in commands
+ * @args: Array of command and arguments
+ * Return: 1 if command was a built-in, 0 if not
  */
-void display_prompt(void)
+int handle_built_in(char **args)
 {
-    printf("#fb$ ");
-    fflush(stdout);
-}
+    if (!args || !args[0])
+        return 0;
 
-/**
- * read_command - Reads a command from standard input
- * Return: The command string or NULL on EOF or error
- */
-char *read_command(void)
-{
-    char *line = NULL;
-    size_t len = 0;
-    ssize_t read;
-
-    read = getline(&line, &len, stdin);
-    if (read == -1)
+    if (strcmp(args[0], "exit") == 0)
     {
-        free(line);
-        return NULL;
+        exit(0);
     }
 
-    if (line[read - 1] == '\n')
-        line[read - 1] = '\0';
-
-    return line;
+    return 0;
 }
 
 /**
@@ -136,24 +122,6 @@ int parse_command(char *command_line, char **args)
 }
 
 /**
- * check_built_in - Checks if command is a built-in
- * @args: Array of command and arguments
- * Return: 1 if built-in command was executed, 0 if not a built-in
- */
-int check_built_in(char **args)
-{
-    if (args[0] == NULL)
-        return 0;
-
-    if (strcmp(args[0], "exit") == 0)
-    {
-        exit(0);
-    }
-
-    return 0;
-}
-
-/**
  * execute_command - Executes the given command with arguments
  * @args: Array of command and arguments
  * @cmd_count: Command counter for error messages
@@ -167,10 +135,10 @@ int execute_command(char **args, int cmd_count, char *program_name)
     char *command_path;
     char error_msg[100];
 
-    if (args[0] == NULL)
+    if (!args || !args[0])
         return 0;
 
-    if (check_built_in(args))
+    if (handle_built_in(args))
         return 0;
 
     command_path = find_command(args[0]);
@@ -193,7 +161,6 @@ int execute_command(char **args, int cmd_count, char *program_name)
     
     if (pid == 0)
     {
-        args[0] = command_path;
         if (execve(command_path, args, environ) == -1)
         {
             snprintf(error_msg, sizeof(error_msg), 
@@ -229,13 +196,13 @@ int main(int argc, char **argv)
     while (1)
     {
         if (interactive)
-            display_prompt();
+            write(STDOUT_FILENO, "#$fb ", 2);
 
         command_line = read_command();
         if (command_line == NULL)
         {
             if (interactive)
-                printf("\n");
+                write(STDOUT_FILENO, "\n", 1);
             break;
         }
 

@@ -1,133 +1,190 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 
-#define MAX_CMD_LEN 1024
-#define MAX_ARG_COUNT 100
-
+#define BUFFER_SIZE 1024
+#define MAX_ARGS 64
 extern char **environ;
 
-void display_prompt(void) {
+/**
+ * display_prompt - Displays the shell prompt
+ */
+void display_prompt(void)
+{
     printf("#fb$ ");
+    fflush(stdout);
 }
 
-void read_command(char *buffer) {
-    if (fgets(buffer, MAX_CMD_LEN, stdin) == NULL) {
-        if (feof(stdin)) {
-            printf("\n");
-            exit(0);
-        } else {
-            perror("fgets");
-            exit(1);
-        }
+/**
+ * read_command - Reads a command from standard input
+ * Return: The command string or NULL on EOF or error
+ */
+char *read_command(void)
+{
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    read = getline(&line, &len, stdin);
+    if (read == -1)
+    {
+        free(line);
+        return NULL;
     }
 
-    buffer[strcspn(buffer, "\n")] = '\0';
+    if (line[read - 1] == '\n')
+        line[read - 1] = '\0';
+
+    return line;
 }
 
-void parse_command(char *command, char **argv) {
-    int i = 0;
+/**
+ * find_command - Searches for command in PATH
+ * @command: Command to find
+ * Return: Full path of command if found, NULL if not found
+ */
+char *find_command(char *command)
+{
+    char *path, *path_copy, *path_token, *file_path;
+    int command_length, directory_length;
+    struct stat buffer;
 
-    argv[i] = strtok(command, " ");
-    while (argv[i] != NULL && i < MAX_ARG_COUNT - 1) {
-        argv[++i] = strtok(NULL, " ");
-    }
-    argv[i] = NULL;
-}
-
-int command_exists(char *command) {
-    struct stat st;
-    char *path;
-    char *path_copy;
-    char *dir;
-    
-    if (stat(command, &st) == 0) {
-        return 1;
+    if (strchr(command, '/') != NULL)
+    {
+        if (stat(command, &buffer) == 0)
+            return strdup(command);
+        return NULL;
     }
 
     path = getenv("PATH");
-    if (!path) {
-        return 0;
-    }
+    if (!path)
+        return NULL;
 
     path_copy = strdup(path);
-    dir = strtok(path_copy, ":");
+    command_length = strlen(command);
+    path_token = strtok(path_copy, ":");
 
-    while (dir != NULL) {
-        char full_path[MAX_CMD_LEN];
-        snprintf(full_path, sizeof(full_path), "%s/%s", dir, command);
+    while (path_token != NULL)
+    {
+        directory_length = strlen(path_token);
+        file_path = malloc(directory_length + command_length + 2);
+        strcpy(file_path, path_token);
+        strcat(file_path, "/");
+        strcat(file_path, command);
 
-        if (stat(full_path, &st) == 0) {
+        if (stat(file_path, &buffer) == 0)
+        {
             free(path_copy);
-            return 1;
+            return file_path;
         }
-
-        dir = strtok(NULL, ":");
+        free(file_path);
+        path_token = strtok(NULL, ":");
     }
 
     free(path_copy);
-    return 0;
+    return NULL;
 }
 
-void execute_command(char **argv) {
+/**
+ * parse_command - Splits command line into command and arguments
+ * @command_line: The command line to parse
+ * @args: Array to store the command and arguments
+ * Return: Number of arguments
+ */
+int parse_command(char *command_line, char **args)
+{
+    int count = 0;
+    char *token;
+
+    token = strtok(command_line, " \t");
+    while (token != NULL && count < MAX_ARGS - 1)
+    {
+        args[count] = token;
+        count++;
+        token = strtok(NULL, " \t");
+    }
+    args[count] = NULL;
+    return count;
+}
+
+/**
+ * execute_command - Executes the given command with arguments
+ * @args: Array of command and arguments
+ */
+void execute_command(char **args)
+{
     pid_t pid;
     int status;
+    char *command_path;
 
-    if (!command_exists(argv[0])) {
-        fprintf(stderr, "%s: command not found\n", argv[0]);
+    if (args[0] == NULL)
+        return;
+
+    command_path = find_command(args[0]);
+    if (command_path == NULL)
+    {
+        printf("./shell: No such file or directory\n");
         return;
     }
 
-    if ((pid = fork()) < 0) {
-        perror("fork");
-        exit(1);
-    } else if (pid == 0) {
-        if (execve(argv[0], argv, environ) == -1) {
-            perror(argv[0]);
-            exit(1);
+    pid = fork();
+    if (pid == -1)
+    {
+        perror("Error:");
+        free(command_path);
+        return;
+    }
+    
+    if (pid == 0)
+    {
+        args[0] = command_path;
+        if (execve(command_path, args, environ) == -1)
+        {
+            perror("./shell");
+            exit(EXIT_FAILURE);
         }
-    } else {
-        do {
-            if (waitpid(pid, &status, 0) == -1) {
-                perror("waitpid");
-                exit(1);
-            }
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+    else
+    {
+        wait(&status);
+        free(command_path);
     }
 }
 
-void print_env(void) {
-    char **env;
+/**
+ * main - Simple shell main function
+ * Return: Always 0
+ */
+int main(void)
+{
+    char *command_line;
+    char *args[MAX_ARGS];
+    int interactive = isatty(STDIN_FILENO);
 
-    for (env = environ; *env != 0; env++) {
-        printf("%s\n", *env);
-    }
-}
+    while (1)
+    {
+        if (interactive)
+            display_prompt();
 
-int main(void) {
-    char command[MAX_CMD_LEN];
-    char *argv[MAX_ARG_COUNT];
-
-    while (1) {
-        display_prompt();
-        read_command(command);
-
-        if (strlen(command) == 0) {
-            continue;
+        command_line = read_command();
+        if (command_line == NULL)
+        {
+            if (interactive)
+                printf("\n");
+            break;
         }
 
-        parse_command(command, argv);
-
-        if (strcmp(argv[0], "exit") == 0) {
-            exit(0);
-        } else if (strcmp(argv[0], "env") == 0) {
-            print_env();
-        } else {
-            execute_command(argv);
+        if (strlen(command_line) > 0)
+        {
+            parse_command(command_line, args);
+            execute_command(args);
         }
+
+        free(command_line);
     }
 
     return 0;

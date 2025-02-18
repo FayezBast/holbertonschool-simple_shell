@@ -43,6 +43,28 @@ char *read_command(void)
 }
 
 /**
+ * get_path_from_environ - Get PATH value from environ
+ * Return: Copy of PATH value or NULL if not found
+ */
+char *get_path_from_environ(void)
+{
+    int i;
+    char *path_copy = NULL;
+    const char *path_prefix = "PATH=";
+    size_t prefix_len = strlen(path_prefix);
+
+    for (i = 0; environ[i] != NULL; i++)
+    {
+        if (strncmp(environ[i], path_prefix, prefix_len) == 0)
+        {
+            path_copy = strdup(environ[i] + prefix_len);
+            return path_copy;
+        }
+    }
+    return NULL;
+}
+
+/**
  * find_command - Searches for command in PATH
  * @command: Command to find
  * Return: Full path of command if found, NULL if not found
@@ -60,7 +82,7 @@ char *find_command(char *command)
         return NULL;
     }
 
-    path = getenv("PATH");
+    path = get_path_from_environ();
     if (!path)
         return NULL;
 
@@ -79,6 +101,7 @@ char *find_command(char *command)
         if (stat(file_path, &buffer) == 0)
         {
             free(path_copy);
+            free(path);
             return file_path;
         }
         free(file_path);
@@ -86,6 +109,7 @@ char *find_command(char *command)
     }
 
     free(path_copy);
+    free(path);
     return NULL;
 }
 

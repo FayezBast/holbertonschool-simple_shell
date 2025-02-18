@@ -1,122 +1,77 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
+#include <string.h>
 #include <sys/wait.h>
-#include <errno.h>
 
-#define PROMPT "$fb "
-#define MAX_ARGS 64
+#define MAX_CMD_LEN 1024
+#define MAX_ARG_COUNT 100
 
-void execute_command(char *cmd)
-{
-    char *args[MAX_ARGS];
-    char *token;
+void display_prompt(void) {
+    printf("#fb$ ");
+}
+
+void read_command(char *buffer) {
+    if (fgets(buffer, MAX_CMD_LEN, stdin) == NULL) {
+        if (feof(stdin)) {
+            printf("\n");
+            exit(0);
+        } else {
+            perror("fgets");
+            exit(1);
+        }
+    }
+
+    buffer[strcspn(buffer, "\n")] = '\0';
+}
+
+void parse_command(char *command, char **argv) {
     int i = 0;
-    char *path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin";
-    char *path_token;
-    char cmd_path[1024];
-    int found;
 
-    token = strtok(cmd, " \t");
-    while (token != NULL && i < MAX_ARGS - 1)
-    {
-        args[i++] = token;
-        token = strtok(NULL, " \t");
+    argv[i] = strtok(command, " ");
+    while (argv[i] != NULL && i < MAX_ARG_COUNT - 1) {
+        argv[++i] = strtok(NULL, " ");
     }
-    args[i] = NULL;
+    argv[i] = NULL;
+}
 
-    if (args[0] == NULL)
-        return;
+void execute_command(char **argv) {
+    pid_t pid;
+    int status;
 
-    if (strchr(args[0], '/') != NULL)
-    {
-        if (access(args[0], X_OK) == 0)
-        {
-            if (fork() == 0)
-            {
-                execve(args[0], args, NULL);
-                perror("execve");
-                exit(EXIT_FAILURE);
+    if ((pid = fork()) < 0) {
+        perror("fork");
+        exit(1);
+    } else if (pid == 0) {
+        if (execve(argv[0], argv, environ) == -1) {
+            perror(argv[0]);
+            exit(1);
+        }
+    } else {
+        do {
+            if (waitpid(pid, &status, 0) == -1) {
+                perror("waitpid");
+                exit(1);
             }
-            else
-            {
-                wait(NULL);
-            }
-        }
-        else
-        {
-            fprintf(stderr, "Command not found: %s\n", args[0]);
-        }
-        return;
-    }
-
-    path_token = strtok(path, ":");
-    found = 0;
-
-    while (path_token != NULL)
-    {
-        snprintf(cmd_path, sizeof(cmd_path), "%s/%s", path_token, args[0]);
-        if (access(cmd_path, X_OK) == 0)
-        {
-            args[0] = cmd_path;
-            found = 1;
-            break;
-        }
-        path_token = strtok(NULL, ":");
-    }
-
-    if (!found)
-    {
-        fprintf(stderr, "Command not found: %s\n", args[0]);
-        return;
-    }
-
-    if (fork() == 0)
-    {
-        execve(args[0], args, NULL);
-        perror("execve");
-        exit(EXIT_FAILURE);
-    }
-    else
-    {
-        wait(NULL);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }
 }
 
-int main(void)
-{
-    char *line = NULL;
-    size_t len = 0;
-    int interactive = isatty(STDIN_FILENO);
-    char *command;
+int main(void) {
+    char command[MAX_CMD_LEN];
+    char *argv[MAX_ARG_COUNT];
 
-    while (1)
-    {
-        if (interactive)
-        {
-            printf(PROMPT);
-            fflush(stdout);
+    while (1) {
+        display_prompt();
+        read_command(command);
+
+        if (strlen(command) == 0) {
+            continue;
         }
 
-        if (getline(&line, &len, stdin) == -1)
-        {
-            if (interactive)
-                printf("\n");
-            break;
-        }
-
-        line[strcspn(line, "\n")] = '\0';
-
-        command = strtok(line, ";");
-        while (command != NULL)
-        {
-            execute_command(command);
-            command = strtok(NULL, ";");
-        }
+        parse_command(command, argv);
+        execute_command(argv);
     }
 
-    free(line);
     return 0;
 }

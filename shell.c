@@ -15,7 +15,7 @@ extern char **environ;
  */
 void display_prompt(void)
 {
-    printf("#fb$ ");
+    printf(":) ");
     fflush(stdout);
 }
 
@@ -138,21 +138,28 @@ int parse_command(char *command_line, char **args)
 /**
  * execute_command - Executes the given command with arguments
  * @args: Array of command and arguments
+ * @cmd_count: Command counter for error messages
+ * @program_name: Name of the shell program
+ * Return: Status code
  */
-void execute_command(char **args)
+int execute_command(char **args, int cmd_count, char *program_name)
 {
     pid_t pid;
     int status;
     char *command_path;
+    char error_msg[100];
 
     if (args[0] == NULL)
-        return;
+        return 0;
 
     command_path = find_command(args[0]);
     if (command_path == NULL)
     {
-        printf("./shell: No such file or directory\n");
-        return;
+        snprintf(error_msg, sizeof(error_msg), 
+                "%s: %d: %s: not found\n", 
+                program_name, cmd_count, args[0]);
+        write(STDERR_FILENO, error_msg, strlen(error_msg));
+        return 127;
     }
 
     pid = fork();
@@ -160,7 +167,7 @@ void execute_command(char **args)
     {
         perror("Error:");
         free(command_path);
-        return;
+        return 1;
     }
     
     if (pid == 0)
@@ -168,26 +175,35 @@ void execute_command(char **args)
         args[0] = command_path;
         if (execve(command_path, args, environ) == -1)
         {
-            perror("./shell");
-            exit(EXIT_FAILURE);
+            snprintf(error_msg, sizeof(error_msg), 
+                    "%s: %d: %s: not found\n", 
+                    program_name, cmd_count, args[0]);
+            write(STDERR_FILENO, error_msg, strlen(error_msg));
+            free(command_path);
+            exit(127);
         }
     }
     else
     {
         wait(&status);
         free(command_path);
+        return WEXITSTATUS(status);
     }
+    return 0;
 }
 
 /**
  * main - Simple shell main function
  * Return: Always 0
  */
-int main(void)
+int main(int argc, char **argv)
 {
     char *command_line;
     char *args[MAX_ARGS];
     int interactive = isatty(STDIN_FILENO);
+    int cmd_count = 1;
+    int status = 0;
+    char *program_name = (argc > 0) ? argv[0] : "./hsh";
 
     while (1)
     {
@@ -205,11 +221,12 @@ int main(void)
         if (strlen(command_line) > 0)
         {
             parse_command(command_line, args);
-            execute_command(args);
+            status = execute_command(args, cmd_count, program_name);
+            cmd_count++;
         }
 
         free(command_line);
     }
 
-    return 0;
+    return status;
 }

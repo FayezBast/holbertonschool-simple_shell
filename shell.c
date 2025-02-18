@@ -10,6 +10,13 @@
 #define MAX_ARGS 64
 extern char **environ;
 
+char *read_command(void);
+void execute_command(char **args, int cmd_count, char *program_name);
+char *find_command(char *command);
+int parse_command(char *command_line, char **args);
+int handle_built_in(char **args);
+char *get_path_from_environ(void);
+
 /**
  * handle_built_in - Handles built-in commands
  * @args: Array of command and arguments
@@ -48,6 +55,29 @@ char *get_path_from_environ(void)
         }
     }
     return NULL;
+}
+
+/**
+ * read_command - Reads a command from standard input
+ * Return: The command string or NULL on EOF or error
+ */
+char *read_command(void)
+{
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    read = getline(&line, &len, stdin);
+    if (read == -1)
+    {
+        free(line);
+        return NULL;
+    }
+
+    if (line[read - 1] == '\n')
+        line[read - 1] = '\0';
+
+    return line;
 }
 
 /**
@@ -126,9 +156,8 @@ int parse_command(char *command_line, char **args)
  * @args: Array of command and arguments
  * @cmd_count: Command counter for error messages
  * @program_name: Name of the shell program
- * Return: Status code
  */
-int execute_command(char **args, int cmd_count, char *program_name)
+void execute_command(char **args, int cmd_count, char *program_name)
 {
     pid_t pid;
     int status;
@@ -136,10 +165,10 @@ int execute_command(char **args, int cmd_count, char *program_name)
     char error_msg[100];
 
     if (!args || !args[0])
-        return 0;
+        return;
 
     if (handle_built_in(args))
-        return 0;
+        return;
 
     command_path = find_command(args[0]);
     if (command_path == NULL)
@@ -148,7 +177,7 @@ int execute_command(char **args, int cmd_count, char *program_name)
                 "%s: %d: %s: not found\n", 
                 program_name, cmd_count, args[0]);
         write(STDERR_FILENO, error_msg, strlen(error_msg));
-        return 127;
+        return;
     }
 
     pid = fork();
@@ -156,7 +185,7 @@ int execute_command(char **args, int cmd_count, char *program_name)
     {
         perror("Error:");
         free(command_path);
-        return 1;
+        return;
     }
     
     if (pid == 0)
@@ -175,9 +204,7 @@ int execute_command(char **args, int cmd_count, char *program_name)
     {
         wait(&status);
         free(command_path);
-        return WEXITSTATUS(status);
     }
-    return 0;
 }
 
 /**
@@ -190,13 +217,12 @@ int main(int argc, char **argv)
     char *args[MAX_ARGS];
     int interactive = isatty(STDIN_FILENO);
     int cmd_count = 1;
-    int status = 0;
     char *program_name = (argc > 0) ? argv[0] : "./hsh";
 
     while (1)
     {
         if (interactive)
-            write(STDOUT_FILENO, "#$fb ", 2);
+            write(STDOUT_FILENO, "#fb$ ", 5);
 
         command_line = read_command();
         if (command_line == NULL)
@@ -209,12 +235,12 @@ int main(int argc, char **argv)
         if (strlen(command_line) > 0)
         {
             parse_command(command_line, args);
-            status = execute_command(args, cmd_count, program_name);
+            execute_command(args, cmd_count, program_name);
             cmd_count++;
         }
 
         free(command_line);
     }
 
-    return status;
+    return 0;
 }

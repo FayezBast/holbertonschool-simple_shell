@@ -3,9 +3,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 #define MAX_CMD_LEN 1024
 #define MAX_ARG_COUNT 100
+
+extern char **environ;
 
 void display_prompt(void) {
     printf("#fb$ ");
@@ -35,9 +38,44 @@ void parse_command(char *command, char **argv) {
     argv[i] = NULL;
 }
 
+int command_exists(char *command) {
+    struct stat st;
+    if (stat(command, &st) == 0) {
+        return 1;
+    }
+
+    char *path = getenv("PATH");
+    if (!path) {
+        return 0;
+    }
+
+    char *path_copy = strdup(path);
+    char *dir = strtok(path_copy, ":");
+
+    while (dir != NULL) {
+        char full_path[MAX_CMD_LEN];
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir, command);
+
+        if (stat(full_path, &st) == 0) {
+            free(path_copy);
+            return 1;
+        }
+
+        dir = strtok(NULL, ":");
+    }
+
+    free(path_copy);
+    return 0;
+}
+
 void execute_command(char **argv) {
     pid_t pid;
     int status;
+
+    if (!command_exists(argv[0])) {
+        fprintf(stderr, "%s: command not found\n", argv[0]);
+        return;
+    }
 
     if ((pid = fork()) < 0) {
         perror("fork");
@@ -57,6 +95,12 @@ void execute_command(char **argv) {
     }
 }
 
+void print_env(void) {
+    for (char **env = environ; *env != 0; env++) {
+        printf("%s\n", *env);
+    }
+}
+
 int main(void) {
     char command[MAX_CMD_LEN];
     char *argv[MAX_ARG_COUNT];
@@ -70,7 +114,14 @@ int main(void) {
         }
 
         parse_command(command, argv);
-        execute_command(argv);
+
+        if (strcmp(argv[0], "exit") == 0) {
+            exit(0);
+        } else if (strcmp(argv[0], "env") == 0) {
+            print_env();
+        } else {
+            execute_command(argv);
+        }
     }
 
     return 0;

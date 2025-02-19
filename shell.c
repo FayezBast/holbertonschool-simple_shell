@@ -8,6 +8,7 @@
 
 #define BUFFER_SIZE 1024
 #define MAX_ARGS 64
+
 extern char **environ;
 static int exit_requested = 0;
 static int exit_code = 0;
@@ -18,7 +19,7 @@ void execute_command(char **args, int cmd_count, char *program_name);
 char *find_command(char *command);
 int parse_command(char *command_line, char **args);
 int handle_built_in(char **args, char *program_name);
-char *get_path_from_environ(void);
+
 /**
  * handle_built_in - Handles built-in commands
  * @args: Array of command and arguments
@@ -51,20 +52,20 @@ int handle_built_in(char **args, char *program_name)
     }
 
     if (strcmp(args[0], "env") == 0)
-{
-    char **env = environ;
-    while (*env)
     {
-        printf("%s\n", *env);
-        env++;
+        char **env = environ;
+        while (*env)
+        {
+            printf("%s\n", *env);
+            env++;
+        }
+        last_status = 0;
+        return 1;
     }
-    last_status = 0;
-    return 1;
-}
-
 
     return 0;
 }
+
 /**
  * read_command - Reads a command from standard input
  * Return: The command string or NULL on EOF or error
@@ -220,3 +221,4 @@ int main(int argc, char **argv)
 
     return last_status;
 }
+

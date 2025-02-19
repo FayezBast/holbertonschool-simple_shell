@@ -9,7 +9,8 @@
 #define BUFFER_SIZE 1024
 #define MAX_ARGS 64
 extern char **environ;
-
+static int exit_requested = 0;
+static int exit_code = 0;
 int last_status = 0;
 
 char *read_command(void);
@@ -31,28 +32,26 @@ int handle_built_in(char **args, char *program_name)
 
     if (strcmp(args[0], "exit") == 0)
     {
-        int status = last_status; 
-
+        exit_code = last_status;
         if (args[1])
         {
             char *endptr;
-            long val = strtol(args[1], &endptr, 10);
+            long status = strtol(args[1], &endptr, 10);
 
-            if (*endptr != '\0' || val < 0 || val > 255)
+            if (*endptr != '\0' || status > 255 || status < 0)
             {
                 fprintf(stderr, "%s: 1: exit: Illegal number: %s\n", program_name, args[1]);
                 last_status = 2;
                 return 1;
             }
-            status = (int)val;
+            exit_code = (int)status;
         }
-
-        exit(status);
+        exit_requested = 1;
+        return 1;
     }
 
     return 0;
 }
-
 /**
  * read_command - Reads a command from standard input
  * Return: The command string or NULL on EOF or error
@@ -199,8 +198,12 @@ int main(int argc, char **argv)
         }
 
         free(command_line);
+
+        if (exit_requested)
+        {
+            exit(exit_code);
+        }
     }
 
     return last_status;
 }
-

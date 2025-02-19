@@ -21,6 +21,9 @@ char *get_path_from_environ(void);
 
 /**
  * handle_built_in - Handles built-in commands
+ * @args: Array of command and arguments
+ * @program_name: Name of the shell program
+ * Return: 1 if command was a built-in, 0 if not
  */
 int handle_built_in(char **args, char *program_name)
 {
@@ -29,12 +32,12 @@ int handle_built_in(char **args, char *program_name)
 
     if (strcmp(args[0], "exit") == 0)
     {
-        int exit_code;
-
+        int exit_code = last_status;
         if (args[1])
         {
             char *endptr;
             long status = strtol(args[1], &endptr, 10);
+            
             if (*endptr != '\0' || status > 255 || status < 0)
             {
                 fprintf(stderr, "%s: 1: exit: Illegal number: %s\n", program_name, args[1]);
@@ -43,11 +46,6 @@ int handle_built_in(char **args, char *program_name)
             }
             exit_code = (int)status;
         }
-        else
-        {
-            exit_code = last_status;
-        }
-
         exit(exit_code);
     }
 
@@ -55,28 +53,8 @@ int handle_built_in(char **args, char *program_name)
 }
 
 /**
- * get_path_from_environ - Get PATH value from environ
- */
-char *get_path_from_environ(void)
-{
-    int i;
-    char *path_copy = NULL;
-    const char *path_prefix = "PATH=";
-    size_t prefix_len = strlen(path_prefix);
-
-    for (i = 0; environ[i] != NULL; i++)
-    {
-        if (strncmp(environ[i], path_prefix, prefix_len) == 0)
-        {
-            path_copy = strdup(environ[i] + prefix_len);
-            return path_copy;
-        }
-    }
-    return NULL;
-}
-
-/**
  * read_command - Reads a command from standard input
+ * Return: The command string or NULL on EOF or error
  */
 char *read_command(void)
 {
@@ -99,60 +77,31 @@ char *read_command(void)
 
 /**
  * find_command - Searches for command in PATH
+ * @command: Command to find
+ * Return: Full path of command if found, NULL if not found
  */
 char *find_command(char *command)
 {
-    char *path, *path_copy, *path_token, *file_path;
-    int command_length, directory_length;
     struct stat buffer;
-
     if (strchr(command, '/') != NULL)
     {
         if (stat(command, &buffer) == 0)
             return strdup(command);
         return NULL;
     }
-
-    path = get_path_from_environ();
-    if (!path)
-        return NULL;
-
-    path_copy = strdup(path);
-    command_length = strlen(command);
-    path_token = strtok(path_copy, ":");
-
-    while (path_token != NULL)
-    {
-        directory_length = strlen(path_token);
-        file_path = malloc(directory_length + command_length + 2);
-        strcpy(file_path, path_token);
-        strcat(file_path, "/");
-        strcat(file_path, command);
-
-        if (stat(file_path, &buffer) == 0)
-        {
-            free(path_copy);
-            free(path);
-            return file_path;
-        }
-        free(file_path);
-        path_token = strtok(NULL, ":");
-    }
-
-    free(path_copy);
-    free(path);
     return NULL;
 }
 
 /**
  * parse_command - Splits command line into command and arguments
+ * @command_line: The command line to parse
+ * @args: Array to store the command and arguments
+ * Return: Number of arguments
  */
 int parse_command(char *command_line, char **args)
 {
     int count = 0;
-    char *token;
-
-    token = strtok(command_line, " \t");
+    char *token = strtok(command_line, " \t");
     while (token != NULL && count < MAX_ARGS - 1)
     {
         args[count] = token;
@@ -165,13 +114,15 @@ int parse_command(char *command_line, char **args)
 
 /**
  * execute_command - Executes the given command with arguments
+ * @args: Array of command and arguments
+ * @cmd_count: Command counter for error messages
+ * @program_name: Name of the shell program
  */
 void execute_command(char **args, int cmd_count, char *program_name)
 {
     pid_t pid;
     int status;
     char *command_path;
-    char error_msg[100];
 
     if (!args || !args[0])
         return;
@@ -182,8 +133,7 @@ void execute_command(char **args, int cmd_count, char *program_name)
     command_path = find_command(args[0]);
     if (command_path == NULL)
     {
-        snprintf(error_msg, sizeof(error_msg), "%s: %d: %s: not found\n", program_name, cmd_count, args[0]);
-        write(STDERR_FILENO, error_msg, strlen(error_msg));
+        fprintf(stderr, "%s: %d: %s: not found\n", program_name, cmd_count, args[0]);
         last_status = 127;
         return;
     }
@@ -201,8 +151,7 @@ void execute_command(char **args, int cmd_count, char *program_name)
     {
         if (execve(command_path, args, environ) == -1)
         {
-            snprintf(error_msg, sizeof(error_msg), "%s: %d: %s: not found\n", program_name, cmd_count, args[0]);
-            write(STDERR_FILENO, error_msg, strlen(error_msg));
+            fprintf(stderr, "%s: %d: %s: not found\n", program_name, cmd_count, args[0]);
             free(command_path);
             exit(127);
         }
@@ -218,6 +167,7 @@ void execute_command(char **args, int cmd_count, char *program_name)
 
 /**
  * main - Simple shell main function
+ * Return: Always 0
  */
 int main(int argc, char **argv)
 {

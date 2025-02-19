@@ -50,6 +50,19 @@ int handle_built_in(char **args, char *program_name)
         return 1;
     }
 
+    if (strcmp(args[0], "env") == 0)
+{
+    char **env = environ;
+    while (*env)
+    {
+        printf("%s\n", *env);
+        env++;
+    }
+    last_status = 0;
+    return 1;
+}
+
+
     return 0;
 }
 /**

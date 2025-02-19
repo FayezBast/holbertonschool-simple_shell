@@ -10,26 +10,42 @@
 #define MAX_ARGS 64
 extern char **environ;
 
+int last_status = 0;
+
 char *read_command(void);
 void execute_command(char **args, int cmd_count, char *program_name);
 char *find_command(char *command);
 int parse_command(char *command_line, char **args);
-int handle_built_in(char **args);
+int handle_built_in(char **args, char *program_name);
 char *get_path_from_environ(void);
 
 /**
  * handle_built_in - Handles built-in commands
  * @args: Array of command and arguments
+ * @program_name: Name of the shell program
  * Return: 1 if command was a built-in, 0 if not
  */
-int handle_built_in(char **args)
+int handle_built_in(char **args, char *program_name)
 {
     if (!args || !args[0])
         return 0;
 
     if (strcmp(args[0], "exit") == 0)
     {
-        exit(0);
+        if (args[1])
+        {
+            char *endptr;
+            long status = strtol(args[1], &endptr, 10);
+            
+            if (*endptr != '\0' || status > 255 || status < 0)
+            {
+                fprintf(stderr, "%s: 1: exit: Illegal number: %s\n", program_name, args[1]);
+                last_status = 2;
+                return 1;
+            }
+            exit((int)status);
+        }
+        exit(last_status);
     }
 
     return 0;
@@ -167,7 +183,7 @@ void execute_command(char **args, int cmd_count, char *program_name)
     if (!args || !args[0])
         return;
 
-    if (handle_built_in(args))
+    if (handle_built_in(args, program_name))
         return;
 
     command_path = find_command(args[0]);
@@ -177,6 +193,7 @@ void execute_command(char **args, int cmd_count, char *program_name)
                 "%s: %d: %s: not found\n", 
                 program_name, cmd_count, args[0]);
         write(STDERR_FILENO, error_msg, strlen(error_msg));
+        last_status = 127;
         return;
     }
 
@@ -185,6 +202,7 @@ void execute_command(char **args, int cmd_count, char *program_name)
     {
         perror("Error:");
         free(command_path);
+        last_status = 1;
         return;
     }
     
@@ -203,6 +221,8 @@ void execute_command(char **args, int cmd_count, char *program_name)
     else
     {
         wait(&status);
+        if (WIFEXITED(status))
+            last_status = WEXITSTATUS(status);
         free(command_path);
     }
 }
@@ -242,5 +262,5 @@ int main(int argc, char **argv)
         free(command_line);
     }
 
-    return 0;
+    return last_status;
 }

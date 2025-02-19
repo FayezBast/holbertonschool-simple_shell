@@ -18,7 +18,6 @@ char *find_command(char *command);
 int parse_command(char *command_line, char **args);
 int handle_built_in(char **args, char *program_name);
 char *get_path_from_environ(void);
-
 /**
  * handle_built_in - Handles built-in commands
  * @args: Array of command and arguments
@@ -32,21 +31,23 @@ int handle_built_in(char **args, char *program_name)
 
     if (strcmp(args[0], "exit") == 0)
     {
-        int exit_code = last_status;
+        int status = last_status; 
+
         if (args[1])
         {
             char *endptr;
-            long status = strtol(args[1], &endptr, 10);
-            
-            if (*endptr != '\0' || status > 255 || status < 0)
+            long val = strtol(args[1], &endptr, 10);
+
+            if (*endptr != '\0' || val < 0 || val > 255)
             {
                 fprintf(stderr, "%s: 1: exit: Illegal number: %s\n", program_name, args[1]);
                 last_status = 2;
                 return 1;
             }
-            exit_code = (int)status;
+            status = (int)val;
         }
-        exit(exit_code);
+
+        exit(status);
     }
 
     return 0;
